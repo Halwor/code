@@ -1,0 +1,245 @@
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import RandomizedSearchCV
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, f1_score, roc_auc_score
+import time
+from timeit import default_timer as timer
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+def randomized_search_rf(X_train, y_train, X_test, y_test):
+    print("Starting RandomizedSearchCV for Random Forest Hyperparameter Tuning...")
+    print("=" * 70)
+    
+    # Define the parameter distribution for RandomizedSearchCV
+    param_dist = {
+        'n_estimators': [100, 200, 300, 400, 500],
+        'max_depth': [10, 15, 20, 25, 30, None],
+        'min_samples_split': [2, 5, 10, 15],
+        'min_samples_leaf': [1, 2, 4, 6],
+        'max_features': ['sqrt', 'log2', 0.3, 0.5, 0.7, None],
+        'bootstrap': [True, False],
+        'class_weight': ['balanced', 'balanced_subsample', None],
+        'max_samples': [0.6, 0.7, 0.8, 0.9, None],
+        'criterion': ['gini', 'entropy']
+    }
+    
+    # Create Random Forest classifier
+    rf = RandomForestClassifier(random_state=42, n_jobs=-1)
+    
+    # Initialize RandomizedSearchCV
+    start = timer()
+    random_search = RandomizedSearchCV(
+        estimator=rf,
+        param_distributions=param_dist,
+        n_iter=50,  # Number of parameter settings that are sampled
+        cv=10,       # 5-fold cross-validation
+        verbose=2,
+        random_state=42,
+        n_jobs=-1,  # Use all available cores
+        scoring='f1_weighted',  # Good for imbalanced data
+        return_train_score=True
+    )
+    
+    # Fit the random search model
+    print("Fitting RandomizedSearchCV... This may take a while.")
+    random_search.fit(X_train, y_train)
+    end = timer()
+    
+    print(f"\nRandomizedSearchCV completed in {(end - start)/60:.2f} minutes")
+    print("=" * 70)
+    
+    return random_search
+
+def evaluate_optimized_model(random_search, X_test, y_test):
+    print("\nBEST PARAMETERS FOUND:")
+    print("=" * 50)
+    best_params = random_search.best_params_
+    for param, value in best_params.items():
+        print(f"  {param}: {value}")
+    
+    # Get the best model
+    best_model = random_search.best_estimator_
+    
+    # Make predictions
+    y_pred = best_model.predict(X_test)
+    y_pred_prob = best_model.predict_proba(X_test)
+    
+    # Calculate metrics
+    accuracy = accuracy_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred, average='weighted')
+    roc_auc = roc_auc_score(y_test, y_pred_prob[:, 1])
+    
+    print(f"\nMODEL PERFORMANCE:")
+    print("=" * 50)
+    print(f"Accuracy: {accuracy:.4f}")
+    print(f"F1-Score (weighted): {f1:.4f}")
+    print(f"ROC-AUC: {roc_auc:.4f}")
+    
+    print(f"\nBest Cross-validation Score: {random_search.best_score_:.4f}")
+    
+    print("\nCLASSIFICATION REPORT:")
+    print("=" * 50)
+    print(classification_report(y_test, y_pred))
+    
+    print("CONFUSION MATRIX:")
+    print("=" * 50)
+    cm = confusion_matrix(y_test, y_pred)
+    print(cm)
+    
+    # Plot confusion matrix
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                xticklabels=['Predicted 0', 'Predicted 1'], 
+                yticklabels=['Actual 0', 'Actual 1'])
+    plt.title('Confusion Matrix - Optimized Random Forest')
+    plt.show()
+    
+    return best_model, y_pred, y_pred_prob
+
+def plot_feature_importance(model, feature_names=None, top_n=15):
+    """Plot feature importance from the optimized Random Forest model"""
+    if feature_names is None:
+        feature_names = [f'Feature_{i}' for i in range(len(model.feature_importances_))]
+    
+    feature_imp = pd.DataFrame({
+        'feature': feature_names,
+        'importance': model.feature_importances_
+    }).sort_values('importance', ascending=False)
+    
+    plt.figure(figsize=(10, 8))
+    sns.barplot(data=feature_imp.head(top_n), y='feature', x='importance', palette='viridis')
+    plt.title(f'Top {top_n} Most Important Features - Optimized Random Forest')
+    plt.xlabel('Feature Importance Score')
+    plt.tight_layout()
+    plt.show()
+    
+    print(f"\nTOP {top_n} FEATURES BY IMPORTANCE:")
+    print("=" * 40)
+    print(feature_imp.head(top_n).to_string(index=False))
+    
+    return feature_imp
+
+def compare_with_default_model(optimized_model, X_train, y_train, X_test, y_test):
+    """Compare optimized model with default Random Forest"""
+    print("\n" + "="*70)
+    print("COMPARISON: DEFAULT vs OPTIMIZED RANDOM FOREST")
+    print("="*70)
+    
+    # Train default model
+    start = timer()
+    default_model = RandomForestClassifier(random_state=42, n_jobs=-1)
+    default_model.fit(X_train, y_train)
+    end = timer()
+    default_time = end - start
+    
+    # Make predictions with default model
+    y_pred_default = default_model.predict(X_test)
+    y_pred_prob_default = default_model.predict_proba(X_test)
+    
+    # Calculate metrics for default model
+    accuracy_default = accuracy_score(y_test, y_pred_default)
+    f1_default = f1_score(y_test, y_pred_default, average='weighted')
+    roc_auc_default = roc_auc_score(y_test, y_pred_prob_default[:, 1])
+    
+    # Calculate metrics for optimized model
+    y_pred_optimized = optimized_model.predict(X_test)
+    y_pred_prob_optimized = optimized_model.predict_proba(X_test)
+    accuracy_optimized = accuracy_score(y_test, y_pred_optimized)
+    f1_optimized = f1_score(y_test, y_pred_optimized, average='weighted')
+    roc_auc_optimized = roc_auc_score(y_test, y_pred_prob_optimized[:, 1])
+    
+    # Create comparison table
+    comparison_df = pd.DataFrame({
+        'Metric': ['Accuracy', 'F1-Score (weighted)', 'ROC-AUC', 'Training Time (s)'],
+        'Default RF': [accuracy_default, f1_default, roc_auc_default, default_time],
+        'Optimized RF': [accuracy_optimized, f1_optimized, roc_auc_optimized, 'N/A'],
+        'Improvement': [
+            f"{(accuracy_optimized - accuracy_default)*100:+.2f}%",
+            f"{(f1_optimized - f1_default)*100:+.2f}%", 
+            f"{(roc_auc_optimized - roc_auc_default)*100:+.2f}%",
+            'N/A'
+        ]
+    })
+    
+    print(comparison_df.to_string(index=False))
+    
+    return comparison_df
+
+# Main execution function
+def main():
+    # Assuming you have X_train_resampled, y_train_resampled, X_test, y_test
+    # Perform randomized search
+    random_search = randomized_search_rf(X_train_resampled, y_train_resampled, X_test, y_test)
+    
+    # Evaluate the optimized model
+    best_model, y_pred, y_pred_prob = evaluate_optimized_model(random_search, X_test, y_test)
+    
+    # Plot feature importance
+    # If you have feature names, pass them as: feature_names=X_train_resampled.columns
+    feature_importance_df = plot_feature_importance(best_model)
+    
+    # Compare with default model
+    comparison_results = compare_with_default_model(
+        best_model, X_train_resampled, y_train_resampled, X_test, y_test
+    )
+    
+    # Display top 5 parameter combinations tried
+    print("\nTOP 5 PARAMETER COMBINATIONS TRIED:")
+    print("=" * 50)
+    results_df = pd.DataFrame(random_search.cv_results_)
+    top_5_results = results_df.nlargest(5, 'mean_test_score')[
+        ['mean_test_score', 'std_test_score', 'params']
+    ]
+    
+    for i, (idx, row) in enumerate(top_5_results.iterrows(), 1):
+        print(f"\n#{i} - Score: {row['mean_test_score']:.4f} (±{row['std_test_score']:.4f})")
+        for param, value in row['params'].items():
+            print(f"   {param}: {value}")
+    
+    return best_model, random_search, feature_importance_df
+
+# If you want to run with a smaller search space for faster results:
+def quick_randomized_search(X_train, y_train, X_test, y_test):
+    """Faster version with reduced parameter space"""
+    print("Starting QUICK RandomizedSearchCV...")
+    
+    param_dist_quick = {
+        'n_estimators': [100, 200, 300],
+        'max_depth': [15, 20, 25, None],
+        'min_samples_split': [2, 5, 10],
+        'min_samples_leaf': [1, 2, 4],
+        'max_features': ['sqrt', 'log2', 0.5],
+        'class_weight': ['balanced', None]
+    }
+    
+    rf = RandomForestClassifier(random_state=42, n_jobs=-1)
+    
+    start = timer()
+    random_search_quick = RandomizedSearchCV(
+        estimator=rf,
+        param_distributions=param_dist_quick,
+        n_iter=20,  # Fewer iterations
+        cv=10,       # Fewer folds
+        verbose=1,
+        random_state=42,
+        n_jobs=-1,
+        scoring='f1_weighted'
+    )
+    
+    random_search_quick.fit(X_train, y_train)
+    end = timer()
+    
+    print(f"Quick RandomizedSearchCV completed in {(end - start)/60:.2f} minutes")
+    
+    return random_search_quick
+
+# Execute the main function
+if __name__ == "__main__":
+    # Run the full randomized search
+    best_model, search_results, feature_imp = main()
+    
+    # Or run the quick version for faster results
+    # quick_search = quick_randomized_search(X_train_resampled, y_train_resampled, X_test, y_test)
+    # best_model_quick, y_pred_quick, y_pred_prob_quick = evaluate_optimized_model(quick_search, X_test, y_test)
