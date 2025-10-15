@@ -1,0 +1,37 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Count the occurrences of each class in the y array
+class_counts = np.bincount(y)
+
+# Get the class labels and their corresponding counts
+labels = np.unique(y)
+counts = class_counts[labels]
+
+# Set custom class names
+class_names = ['No', 'Yes']
+
+# Define colors for the bars
+colors = ['#1f77b4', '#ff7f0e']  # Blue for 'No', Orange for 'Yes'
+
+# Create a bar chart with thinner bars
+plt.figure(figsize=(8, 6))  # Set the figure size
+bars = plt.bar(class_names, counts, color=colors, width=0.3)  # Adjust the width here (e.g., 0.3 for thinner bars)
+
+# Add counts on top of each bar
+for bar in bars:
+    height = bar.get_height()
+    plt.text(bar.get_x() + bar.get_width() / 2, height, f'{int(height)}', 
+             ha='center', va='bottom', fontsize=10)
+
+# Add labels and title
+plt.xlabel('Severe Stunting', fontsize=14)
+plt.ylabel('Count', fontsize=14)
+plt.title('Before SMOTE Balancing', fontsize=16, pad=20)
+
+# Customize the grid and layout
+plt.grid(axis='y', linestyle='--', alpha=0.12)
+plt.tight_layout()
+
+# Display the bar chart
+plt.show()
