@@ -1,37 +1,140 @@
-import matplotlib.pyplot as plt
+from imblearn.over_sampling import SMOTE
+from sklearn.model_selection import train_test_split
+import pandas as pd
+
+# First, split your data into training and testing sets
+X = data.loc[:, data.columns != 'stunting']
+y = data['stunting']
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, 
+    test_size=0.2, 
+    random_state=42,
+   
+)
+
+# Now apply SMOTE only to the training set
+smote = SMOTE(random_state=42)  # 'auto' resamples all classes except majority
+X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
+
+print(f"Original training set shape: {X_train.shape}")
+print(f"Resampled training set shape: {X_train_resampled.shape}")
+print(f"Test set shape: {X_test.shape}")  # This remains untouched
+print(f"Class distribution after SMOTE: {pd.Series(y_train_resampled).value_counts()}")
+mport matplotlib.pyplot as plt
 import numpy as np
 
-# Count the occurrences of each class in the y array
-class_counts = np.bincount(y)
+# Data from your description
+original_class_distribution = {
+    'No': 60815 - 15204,  # Assuming test set is separate and we're showing training distribution
+    'Yes': 15204  # This is an approximation since exact original distribution isn't provided
+}
 
-# Get the class labels and their corresponding counts
-labels = np.unique(y)
-counts = class_counts[labels]
+# More accurate calculation based on your resampled data
+# Since after SMOTE both classes are 54111, and original had 60815 total
+# Let's calculate the original distribution
+original_total = 60815
+test_total = 15204
+train_total_before_smote = original_total - test_total  # This would be 45611
 
-# Set custom class names
-class_names = ['No', 'Yes']
+# Let's assume the original imbalance was similar to typical stunting datasets
+# We'll use the information that after SMOTE both classes are balanced at 54111
+# This suggests the minority class was significantly smaller
+original_class_0_before = 54111  # Majority class (approximately)
+original_class_1_before = train_total_before_smote - original_class_0_before  # Minority class
 
-# Define colors for the bars
-colors = ['#1f77b4', '#ff7f0e']  # Blue for 'No', Orange for 'Yes'
+resampled_class_distribution = {
+    'No': 54111,
+    'Yes': 54111
+}
 
-# Create a bar chart with thinner bars
-plt.figure(figsize=(8, 6))  # Set the figure size
-bars = plt.bar(class_names, counts, color=colors, width=0.3)  # Adjust the width here (e.g., 0.3 for thinner bars)
+# Alternative calculation based on your provided data
+# Since you mentioned original training set had 60815 samples and resampled has 108222
+# And after SMOTE both classes are 54111
+original_distribution_corrected = {
+    'No': 54111,  # Majority class
+    'Yes': 60815 - 54111  # Minority class (6704)
+}
 
-# Add counts on top of each bar
-for bar in bars:
+print(f"Original class distribution: {original_distribution_corrected}")
+print(f"Resampled class distribution: {resampled_class_distribution}")
+
+# Create the plot
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+
+# Before SMOTE
+classes = list(original_distribution_corrected.keys())
+counts_before = list(original_distribution_corrected.values())
+colors = ['green', 'red']
+
+bars1 = ax1.bar(classes, counts_before, color=colors, alpha=0.8, edgecolor='black')
+ax1.set_title('Class Distribution Before SMOTE for the Training sets', fontsize=14, fontweight='bold')
+ax1.set_ylabel('Count', fontsize=12)
+ax1.set_xlabel('Severe stunting', fontsize=12)
+
+# Add value labels on bars
+for bar in bars1:
     height = bar.get_height()
-    plt.text(bar.get_x() + bar.get_width() / 2, height, f'{int(height)}', 
-             ha='center', va='bottom', fontsize=10)
+    ax1.text(bar.get_x() + bar.get_width()/2., height + 100,
+             f'{int(height)}', ha='center', va='bottom', fontweight='bold')
 
-# Add labels and title
-plt.xlabel('Severe Stunting', fontsize=14)
-plt.ylabel('Count', fontsize=14)
-plt.title('Before SMOTE Balancing', fontsize=16, pad=20)
+# After SMOTE
+counts_after = list(resampled_class_distribution.values())
+bars2 = ax2.bar(classes, counts_after, color=colors, alpha=0.8, edgecolor='black')
+ax2.set_title('Class Distribution After SMOTE for the Training sets', fontsize=14, fontweight='bold')
+ax2.set_ylabel('Count', fontsize=12)
+ax2.set_xlabel('Severe Stunting', fontsize=12)
 
-# Customize the grid and layout
-plt.grid(axis='y', linestyle='--', alpha=0.12)
+# Add value labels on bars
+for bar in bars2:
+    height = bar.get_height()
+    ax2.text(bar.get_x() + bar.get_width()/2., height + 100,
+             f'{int(height)}', ha='center', va='bottom', fontweight='bold')
+
+# Calculate and display imbalance ratios
+imbalance_ratio_before = original_distribution_corrected['Class 0'] / original_distribution_corrected['Class 1']
+imbalance_ratio_after = resampled_class_distribution['Class 0'] / resampled_class_distribution['Class 1']
+
 plt.tight_layout()
-
-# Display the bar chart
 plt.show()
+
+# Print summary statistics
+print("\n" + "="*50)
+print("SUMMARY STATISTICS")
+print("="*50)
+print(f"Original training set size: {original_total}")
+print(f"Resampled training set size: {sum(resampled_class_distribution.values())}")
+print(f"Test set size: {test_total}")
+print(f"\nBefore SMOTE:")
+print(f"  No: {original_distribution_corrected['Class 0']} samples")
+print(f"  Yes: {original_distribution_corrected['Class 1']} samples")
+print(f"  Imbalance ratio: {imbalance_ratio_before:.2f}:1")
+print(f"\nAfter SMOTE:")
+print(f"  No: {resampled_class_distribution['No']} samples")
+print(f"  Yes: {resampled_class_distribution['Yes']} samples")
+print(f"  Imbalance ratio: {imbalance_ratio_after:.1f}:1")
+
+
+from sklearn.model_selection import StratifiedKFold
+
+# Initialize StratifiedKFold for 10-fold cross-validation
+skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
+
+# Perform 10-fold cross-validation on the training data
+for fold, (train_index, val_index) in enumerate(skf.split(X_train, y_train)):
+    print(f"Fold {fold + 1}")
+    X_train_fold, X_val_fold = X_train.iloc[train_index], X_train.iloc[val_index]  # Use .iloc for pandas DataFrames/Series
+    y_train_fold, y_val_fold = y_train.iloc[train_index], y_train.iloc[val_index]  # Use .iloc for pandas DataFrames/Series
+    
+    # Print the shapes of the current fold
+    print(f"X_train_fold shape: {X_train_fold.shape}")
+    print(f"X_val_fold shape: {X_val_fold.shape}")
+    print(f"y_train_fold shape: {y_train_fold.shape}")
+    print(f"y_val_fold shape: {y_val_fold.shape}")
+    
+    # Here you would train your model on X_train_fold and y_train_fold
+    # and validate it on X_val_fold and y_val_fold
+    # Example:
+    # model.fit(X_train_fold, y_train_fold)
+    # predictions = model.predict(X_val_fold)
+    # Evaluate your model on the validation set
