@@ -1,0 +1,68 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LogisticRegression
+
+ml_names = ['SVM', 'LR', 'DT', 'RF', 'XGB', 'KNN', 'AdaBoost', 'CatBoost']
+sens_all = [sens_svm, sens_lr, sens_dtree, sens_ranfor, sens_xgb, sens_knn, sens_adaboost, sens_catboost]
+spec_all = [spec_svm, spec_lr, spec_dtree, spec_ranfor, spec_xgb, spec_knn, spec_adaboost, spec_catboost]
+prec_all = [prec_svm, prec_lr, prec_dtree, prec_ranfor, prec_xgb, prec_knn, prec_adaboost, prec_catboost]
+rec_all = [rec_svm, rec_lr, rec_dtree, rec_ranfor, rec_xgb, rec_knn, rec_adaboost, rec_catboost]
+f1_all = [f1_svm, f1_lr, f1_dtree, f1_ranfor, f1_xgb, f1_knn, f1_adaboost, f1_catboost]
+accuracy_all = [accuracy_score_svm, accuracy_score_lr, accuracy_score_dtree, accuracy_score_ranfor, accuracy_score_xgb, accuracy_score_knn, accuracy_score_adaboost, accuracy_score_catboost]
+
+def autolabel(bars):
+    """Attach a text label above each bar displaying its height."""
+    for bar in bars:
+        height = bar.get_height()
+        ax.annotate('{:.2f}'.format(height),
+                    xy=(bar.get_x() + bar.get_width() / 2, height),
+                    xytext=(0, 5),  # 3 points vertical offset
+                    textcoords="offset points",
+                    fontsize=12,
+                    rotation=90,
+                    ha='center', va='bottom')
+
+width = 0.25  # the width of the bars
+r1 = np.arange(len(ml_names))  # the label locations
+r2 = [x + width for x in r1]
+r3 = [x + width for x in r2]
+
+# Plot sensitivity, specificity, accuracy, and AUC
+fig, ax = plt.subplots(figsize=(8, 6))
+bar1 = ax.bar(r1, sens_all, width, label='Sensitivity')
+bar2 = ax.bar(r2, spec_all, width, label='Specificity')
+bar3 = ax.bar(r3, accuracy_all, width, label='Accuracy')
+
+ax.set_ylim([0, 1.15])
+ax.set_ylabel('Scores', fontsize=14)
+ax.set_xticks(r2)
+ax.set_xticklabels(ml_names)
+ax.tick_params(axis='both', which='major', labelsize=12)
+ax.set_xlabel("Machine Learning Model", fontsize=14)
+ax.legend(loc='lower left', ncol=3, bbox_to_anchor=(0.25, 1), fontsize=12)
+autolabel(bar1)
+autolabel(bar2)
+autolabel(bar3)
+fig.tight_layout()
+fig.savefig("ml_benchmark_scores.pdf", bbox_inches='tight')
+plt.show()
+
+# Plot precision, recall, and F1 score
+fig, ax = plt.subplots(figsize=(8, 6))
+bar1 = ax.bar(r1, prec_all, width, label='Precision')
+bar2 = ax.bar(r2, rec_all, width, label='Recall')
+bar3 = ax.bar(r3, f1_all, width, label='F1')
+
+ax.set_ylim([0, 1.13])
+ax.set_ylabel('Scores', fontsize=14)
+ax.set_xticks(r2)
+ax.set_xticklabels(ml_names)
+ax.tick_params(axis='both', which='major', labelsize=12)
+ax.set_xlabel("Machine Learning Model", fontsize=14)
+ax.legend(loc='lower left', ncol=3, bbox_to_anchor=(0.25, 1), fontsize=12)
+autolabel(bar1)
+autolabel(bar2)
+autolabel(bar3)
+fig.tight_layout()
+fig.savefig("ml_benchmark_f1.pdf", bbox_inches='tight')
+plt.show()
