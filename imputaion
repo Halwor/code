@@ -1,0 +1,220 @@
+#comparison of imputation techniques
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, f1_score, classification_report
+from sklearn.experimental import enable_iterative_imputer
+from sklearn.impute import SimpleImputer, KNNImputer, IterativeImputer
+import warnings
+warnings.filterwarnings('ignore')
+
+# Load the data
+data = pd.read_csv("extracted_data_all.csv")
+
+# Display basic information about the dataset
+print("Dataset Shape:", data.shape)
+print("\nMissing values per column:")
+print(data.isnull().sum().sort_values(ascending=False).head(10))
+print(f"\nTarget variable 'stunting' distribution:\n{data['stunting'].value_counts()}")
+
+# Separate features and target
+X = data.drop('stunting', axis=1)
+y = data['stunting']
+
+# Identify numerical and categorical columns
+numerical_cols = X.select_dtypes(include=[np.number]).columns.tolist()
+categorical_cols = X.select_dtypes(include=['object']).columns.tolist()
+
+print(f"\nNumerical columns: {len(numerical_cols)}")
+print(f"Categorical columns: {len(categorical_cols)}")
+
+def evaluate_imputation(X_imputed, y_imputed, method_name):
+    """Evaluate the imputed dataset using a classification model"""
+    
+    # Split the data
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_imputed, y_imputed, test_size=0.3, random_state=42, stratify=y_imputed
+    )
+    
+    # Train a Random Forest classifier
+    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    # Make predictions
+    y_pred = model.predict(X_test)
+    
+    # Calculate metrics
+    accuracy = accuracy_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred, average='weighted')
+    
+    print(f"\n{method_name}:")
+    print(f"  Samples: {len(X_imputed)}")
+    print(f"  Accuracy: {accuracy:.6f}")
+    print(f"  F1-Score: {f1:.6f}")
+    
+    return accuracy, f1, len(X_imputed)
+
+# Initialize results storage
+results = []
+
+# Method 1: Complete-case analysis
+print("=" * 60)
+print("COMPLETE-CASE ANALYSIS")
+print("=" * 60)
+
+# Remove rows with any missing values
+complete_case_mask = ~X.isnull().any(axis=1) & ~y.isnull()
+X_complete = X[complete_case_mask]
+y_complete = y[complete_case_mask]
+
+print(f"Original dataset size: {len(X)}")
+print(f"Complete-case dataset size: {len(X_complete)}")
+print(f"Rows removed: {len(X) - len(X_complete)}")
+
+# Convert categorical variables to numeric for modeling
+X_complete_encoded = pd.get_dummies(X_complete, columns=categorical_cols, drop_first=True)
+
+acc, f1, samples = evaluate_imputation(X_complete_encoded, y_complete, "Complete-case analysis")
+results.append({'Method': 'Complete-case analysis', 'Samples': samples, 
+                'Accuracy': acc, 'F1_Score': f1})
+
+# Method 2: Mean/Mode Imputation
+print("\n" + "=" * 60)
+print("MEAN/MODE IMPUTATION")
+print("=" * 60)
+
+X_mean_mode = X.copy()
+
+# Impute numerical columns with mean
+if numerical_cols:
+    num_imputer = SimpleImputer(strategy='mean')
+    X_mean_mode[numerical_cols] = num_imputer.fit_transform(X_mean_mode[numerical_cols])
+
+# Impute categorical columns with mode
+if categorical_cols:
+    cat_imputer = SimpleImputer(strategy='most_frequent')
+    X_mean_mode[categorical_cols] = cat_imputer.fit_transform(X_mean_mode[categorical_cols])
+
+# Handle any remaining missing values in target
+y_mean_mode = y.fillna(y.mode()[0] if y.dtype == 'object' else y.mean())
+
+# Convert categorical variables to numeric
+X_mean_mode_encoded = pd.get_dummies(X_mean_mode, columns=categorical_cols, drop_first=True)
+
+acc, f1, samples = evaluate_imputation(X_mean_mode_encoded, y_mean_mode, "Mean/Mode Imputation")
+results.append({'Method': 'Mean/Mode Imputation', 'Samples': samples, 
+                'Accuracy': acc, 'F1_Score': f1})
+
+# Method 3: KNN Imputation
+print("\n" + "=" * 60)
+print("KNN IMPUTATION")
+print("=" * 60)
+
+X_knn = X.copy()
+
+# First, encode categorical variables for KNN imputation
+X_knn_encoded = pd.get_dummies(X_knn, columns=categorical_cols, drop_first=True)
+
+# Apply KNN imputation
+knn_imputer = KNNImputer(n_neighbors=5)
+X_knn_imputed = knn_imputer.fit_transform(X_knn_encoded)
+
+X_knn_imputed = pd.DataFrame(X_knn_imputed, columns=X_knn_encoded.columns, index=X_knn_encoded.index)
+
+# Handle target variable
+y_knn = y.fillna(y.mode()[0] if y.dtype == 'object' else y.mean())
+
+acc, f1, samples = evaluate_imputation(X_knn_imputed, y_knn, "KNN Imputation")
+results.append({'Method': 'KNN Imputation', 'Samples': samples, 
+                'Accuracy': acc, 'F1_Score': f1})
+
+# Method 4: MICE Imputation
+print("\n" + "=" * 60)
+print("MICE IMPUTATION")
+print("=" * 60)
+
+X_mice = X.copy()
+
+# Encode categorical variables for MICE
+X_mice_encoded = pd.get_dummies(X_mice, columns=categorical_cols, drop_first=True)
+
+# Apply MICE imputation
+mice_imputer = IterativeImputer(max_iter=10, random_state=42)
+X_mice_imputed = mice_imputer.fit_transform(X_mice_encoded)
+
+X_mice_imputed = pd.DataFrame(X_mice_imputed, columns=X_mice_encoded.columns, index=X_mice_encoded.index)
+
+# Handle target variable
+y_mice = y.fillna(y.mode()[0] if y.dtype == 'object' else y.mean())
+
+acc, f1, samples = evaluate_imputation(X_mice_imputed, y_mice, "MICE Imputation")
+results.append({'Method': 'MICE Imputation', 'Samples': samples, 
+                'Accuracy': acc, 'F1_Score': f1})
+
+# Create comparison table
+print("\n" + "=" * 80)
+print("FINAL COMPARISON TABLE")
+print("=" * 80)
+
+results_df = pd.DataFrame(results)
+print("\nPerformance Comparison:")
+print(results_df.to_string(index=False))
+
+# Find the best method
+best_method = results_df.loc[results_df['Accuracy'].idxmax()]
+print(f"\n🏆 BEST METHOD: {best_method['Method']}")
+print(f"   Accuracy: {best_method['Accuracy']:.6f}")
+print(f"   F1-Score: {best_method['F1_Score']:.6f}")
+print(f"   Samples: {best_method['Samples']}")
+
+# Additional analysis: Feature importance from best model
+print("\n" + "=" * 60)
+print("FEATURE IMPORTANCE ANALYSIS (Using MICE)")
+print("=" * 60)
+
+# Train final model on MICE imputed data
+X_train, X_test, y_train, y_test = train_test_split(
+    X_mice_imputed, y_mice, test_size=0.3, random_state=42, stratify=y_mice
+)
+
+final_model = RandomForestClassifier(n_estimators=100, random_state=42)
+final_model.fit(X_train, y_train)
+
+# Get feature importance
+feature_importance = pd.DataFrame({
+    'feature': X_mice_imputed.columns,
+    'importance': final_model.feature_importances_
+}).sort_values('importance', ascending=False)
+
+print("\nTop 10 Most Important Features for Stunting Prediction:")
+print(feature_importance.head(10).to_string(index=False))
+
+# Visualization (optional - requires matplotlib)
+try:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    
+    # Plot comparison
+    plt.figure(figsize=(12, 6))
+    
+    plt.subplot(1, 2, 1)
+    methods = [r['Method'] for r in results]
+    accuracies = [r['Accuracy'] for r in results]
+    plt.bar(methods, accuracies, color=['red', 'orange', 'blue', 'green'])
+    plt.title('Accuracy Comparison of Imputation Methods')
+    plt.xticks(rotation=45, ha='right')
+    plt.ylabel('Accuracy')
+    
+    plt.subplot(1, 2, 2)
+    f1_scores = [r['F1_Score'] for r in results]
+    plt.bar(methods, f1_scores, color=['red', 'orange', 'blue', 'green'])
+    plt.title('F1-Score Comparison of Imputation Methods')
+    plt.xticks(rotation=45, ha='right')
+    plt.ylabel('F1-Score')
+    
+    plt.tight_layout()
+    plt.show()
+    
+except ImportError:
+    print("\nMatplotlib not available for visualization")
